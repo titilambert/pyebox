@@ -1,12 +1,13 @@
 """
 Pyebox
 """
+import asyncio
 import json
 import logging
 import re
 
+import aiohttp
 from bs4 import BeautifulSoup
-import requests
 
 
 _LOGGER = logging.getLogger('pyebox')
@@ -28,6 +29,7 @@ USAGE_MAP = {"before_offpeak_download": 0,
              "upload": 7,
              "total": 8}
 
+
 class PyEboxError(Exception):
     pass
 
@@ -39,19 +41,20 @@ class EboxClient(object):
         self.username = username
         self.password = password
         self._data = {}
-        self._cookies = None
+        self._session = None
         self._timeout = timeout
 
+    @asyncio.coroutine
     def _get_login_page(self):
         """Go to the login page."""
         try:
-            raw_res = requests.get(HOME_URL, timeout=self._timeout)
+            raw_res = yield from self._session.get(HOME_URL,
+                                                   timeout=self._timeout)
         except OSError:
             raise PyEboxError("Can not connect to login page")
-        # Get cookies
-        self._cookies = raw_res.cookies
         # Get token
-        soup = BeautifulSoup(raw_res.content, 'html.parser')
+        content = yield from raw_res.text()
+        soup = BeautifulSoup(content, 'html.parser')
         token_node = soup.find('input', {'name': '_csrf_security_token'})
         if token_node is None:
             raise PyEboxError("No token input found")
@@ -60,6 +63,7 @@ class EboxClient(object):
             raise PyEboxError("No token found")
         return token
 
+    @asyncio.coroutine
     def _post_login_page(self, token):
         """Login to EBox website."""
         data = {"usrname": self.username,
@@ -67,20 +71,18 @@ class EboxClient(object):
                 "_csrf_security_token": token}
 
         try:
-            raw_res = requests.post(LOGIN_URL,
-                                    data=data,
-                                    cookies=self._cookies,
-                                    allow_redirects=False,
-                                    timeout=self._timeout)
+            raw_res = yield from self._session.post(LOGIN_URL,
+                                                    data=data,
+                                                    allow_redirects=False,
+                                                    timeout=self._timeout)
         except OSError:
             raise PyEboxError("Can not submit login form")
-        if raw_res.status_code != 302:
+        if raw_res.status != 302:
             raise PyEboxError("Bad HTTP status code")
 
-        # Update cookies
-        self._cookies.update(raw_res.cookies)
         return True
 
+    @asyncio.coroutine
     def _get_home_data(self):
         """Get home data."""
         # Import
@@ -89,15 +91,13 @@ class EboxClient(object):
         home_data = {}
         # Http request
         try:
-            raw_res = requests.get(HOME_URL,
-                                   cookies=self._cookies,
-                                   timeout=self._timeout)
+            raw_res = yield from self._session.get(HOME_URL,
+                                                   timeout=self._timeout)
         except OSError:
             raise PyEboxError("Can not get home page")
-        # Update cookies
-        self._cookies.update(raw_res.cookies)
         # Prepare soup
-        soup = BeautifulSoup(raw_res.content, 'html.parser')
+        content = yield from raw_res.text()
+        soup = BeautifulSoup(content, 'html.parser')
         # Looking for limit
         limit_node = soup.find('span', {'class': 'text_summary3'})
         if limit_node is None:
@@ -128,11 +128,13 @@ class EboxClient(object):
             raise PyEboxError("Can not get usage percent")
         return home_data
 
+    @asyncio.coroutine
     def _get_usage_data(self):
         """Get data usage."""
         # Get Usage
-        raw_res = requests.get(USAGE_URL, cookies=self._cookies)
-        soup = BeautifulSoup(raw_res.content, 'html.parser')
+        raw_res = yield from self._session.get(USAGE_URL)
+        content = yield from raw_res.text()
+        soup = BeautifulSoup(content, 'html.parser')
         # Find all span
         span_list = soup.find_all("span", {"class": "switchDisplay"})
         if span_list is None:
@@ -147,19 +149,22 @@ class EboxClient(object):
                 raise PyEboxError("Can not get %s", key)
         return usage_data
 
+    @asyncio.coroutine
     def fetch_data(self):
         """Get the latest data from HydroQuebec."""
-        # Get login page
-        token = self._get_login_page()
-        # Post login page
-        self._post_login_page(token)
-        # Get home data
-        home_data = self._get_home_data()
-        # Get usage data
-        usage_data = self._get_usage_data()
-        # merge data
-        self._data.update(home_data)
-        self._data.update(usage_data)
+        with aiohttp.ClientSession() as session:
+            self._session = session
+            # Get login page
+            token = yield from self._get_login_page()
+            # Post login page
+            yield from self._post_login_page(token)
+            # Get home data
+            home_data = yield from self._get_home_data()
+            # Get usage data
+            usage_data = yield from self._get_usage_data()
+            # merge data
+            self._data.update(home_data)
+            self._data.update(usage_data)
 
     def get_data(self):
         """Return collected data"""

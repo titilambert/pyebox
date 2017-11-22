@@ -1,3 +1,4 @@
+import asyncio
 import argparse
 import json
 import sys
@@ -53,7 +54,10 @@ def main():
                         default=REQUESTS_TIMEOUT, help='Request timeout')
     args = parser.parse_args()
     client = EboxClient(args.username, args.password, args.timeout)
-    client.fetch_data()
+
+    loop = asyncio.get_event_loop()
+    fut = asyncio.wait([client.fetch_data()])
+    loop.run_until_complete(fut)
     if not client.get_data():
         return
     if args.json:
