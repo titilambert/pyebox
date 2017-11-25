@@ -107,6 +107,9 @@ class EboxClient(object):
             raise PyEboxError("Can not get limit data")
         try:
             home_data["limit"] = float(raw_data[1].split()[0])
+        except ValueError:
+            # It seems that you don't have any limit...
+            home_data["limit"] = 0.0
         except OSError:
             raise PyEboxError("Can not get limit data")
         # Get balance
