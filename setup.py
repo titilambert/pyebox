@@ -7,11 +7,11 @@ install_reqs = parse_requirements('requirements.txt', session=session)
 test_reqs = parse_requirements('test_requirements.txt', session=session)
 
 setup(name='pyebox',
-      version='1.0.0',
+      version='1.0.1',
       description='Get your EBox consumption (wwww.ebox.ca)',
       author='Thibault Cohen',
       author_email='titilambert@gmail.com',
-      url='http://github.org/titilambert/pyebox',
+      url='http://github.com/titilambert/pyebox',
       package_data={'': ['LICENSE.txt']},
       include_package_data=True,
       packages=['pyebox'],
