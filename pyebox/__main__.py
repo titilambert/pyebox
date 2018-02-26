@@ -3,7 +3,7 @@ import argparse
 import json
 import sys
 
-from pyebox import EboxClient, REQUESTS_TIMEOUT
+from pyebox import EboxClient, REQUESTS_TIMEOUT, PyEboxError
 
 
 def _format_output(account, data):
@@ -56,14 +56,21 @@ def main():
     client = EboxClient(args.username, args.password, args.timeout)
 
     loop = asyncio.get_event_loop()
-    fut = asyncio.wait([client.fetch_data()])
-    loop.run_until_complete(fut)
+    task = loop.create_task(client.fetch_data())
+    try:
+        loop.run_until_complete(task)
+    except PyEboxError as exp:
+        print(exp)
+        client.close_session()
+        return
     if not client.get_data():
+        client.close_session()
         return
     if args.json:
         print(json.dumps(client.get_data()))
     else:
         _format_output(args.username, client.get_data())
+    client.close_session()
 
 
 if __name__ == '__main__':

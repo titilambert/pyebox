@@ -36,19 +36,25 @@ class PyEboxError(Exception):
 
 class EboxClient(object):
 
-    def __init__(self, username, password, timeout=REQUESTS_TIMEOUT):
+    def __init__(self, username, password, timeout=REQUESTS_TIMEOUT, session=None):
         """Initialize the client object."""
         self.username = username
         self.password = password
         self._data = {}
-        self._session = None
         self._timeout = timeout
+        self._session = session
+
+    @asyncio.coroutine
+    def _get_httpsession(self):
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
 
     @asyncio.coroutine
     def _get_login_page(self):
         """Go to the login page."""
         try:
             raw_res = yield from self._session.get(HOME_URL,
+                                                   allow_redirects=False,
                                                    timeout=self._timeout)
         except OSError:
             raise PyEboxError("Can not connect to login page")
@@ -79,8 +85,23 @@ class EboxClient(object):
             raise PyEboxError("Can not submit login form")
         if raw_res.status != 302:
             raise PyEboxError("Bad HTTP status code")
-
+        # search for errors
+        re_results = re.search(r"err=(\d*)&", raw_res.headers.get('Location'))
+        if re_results:
+            yield from self._handle_login_error(raw_res.headers.get('Location'))
         return True
+
+    @asyncio.coroutine
+    def _handle_login_error(self, url):
+        raw_res = yield from self._session.get(HOST + url)
+        content = yield from raw_res.text()
+        soup = BeautifulSoup(content, 'html.parser')
+        error_node = soup.find("div", id="divErrorLogin")
+        if error_node:
+            error_msg = error_node.find("b")
+            if error_msg and error_msg.text:
+                raise PyEboxError("Login error: {}".format(error_msg.text))
+        raise PyEboxError("Unknown login error")
 
     @asyncio.coroutine
     def _get_home_data(self):
@@ -152,20 +173,24 @@ class EboxClient(object):
     @asyncio.coroutine
     def fetch_data(self):
         """Get the latest data from HydroQuebec."""
-        with aiohttp.ClientSession() as session:
-            self._session = session
-            # Get login page
-            token = yield from self._get_login_page()
-            # Post login page
-            yield from self._post_login_page(token)
-            # Get home data
-            home_data = yield from self._get_home_data()
-            # Get usage data
-            usage_data = yield from self._get_usage_data()
-            # merge data
-            self._data.update(home_data)
-            self._data.update(usage_data)
+        # Get http session
+        yield from self._get_httpsession()
+        # Get login page
+        token = yield from self._get_login_page()
+        # Post login page
+        yield from self._post_login_page(token)
+        # Get home data
+        home_data = yield from self._get_home_data()
+        # Get usage data
+        usage_data = yield from self._get_usage_data()
+        # Merge data
+        self._data.update(home_data)
+        self._data.update(usage_data)
 
     def get_data(self):
         """Return collected data"""
         return self._data
+
+    def close_session(self):
+        """Close current session."""
+        self._session.close()
