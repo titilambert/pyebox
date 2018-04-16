@@ -1,10 +1,10 @@
-from pip.req import parse_requirements
 from setuptools import setup
-from pip.download import PipSession
 
-session = PipSession()
-install_reqs = parse_requirements('requirements.txt', session=session)
-test_reqs = parse_requirements('test_requirements.txt', session=session)
+if sys.version_info < (3,4):
+    sys.exit('Sorry, Python < 3.4 is not supported')
+
+install_requires = list(val.strip() for val in open('requirements.txt'))
+tests_require = list(val.strip() for val in open('test_requirements.txt'))
 
 setup(name='pyebox',
       version='1.1.0',
@@ -21,8 +21,8 @@ setup(name='pyebox',
           ]
       },
       license='Apache 2.0',
-      install_requires=[str(r.req) for r in install_reqs],
-      tests_require=[str(r.req) for r in test_reqs],
+      install_requires=install_requires,
+      tests_require=tests_require,
       classifiers=[
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
