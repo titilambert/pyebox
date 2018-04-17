@@ -122,7 +122,7 @@ class EboxClient(object):
         # Looking for limit
         limit_node = soup.find('span', {'class': 'text_summary3'})
         if limit_node is None:
-            raise PyEboxError("Can not found limit span")
+            raise PyEboxError("Can not find limit span")
         raw_data = [d.strip() for d in limit_node.text.split("/")]
         if len(raw_data) != 2:
             raise PyEboxError("Can not get limit data")
@@ -172,7 +172,7 @@ class EboxClient(object):
 
     @asyncio.coroutine
     def fetch_data(self):
-        """Get the latest data from HydroQuebec."""
+        """Get the latest data from EBox."""
         # Get http session
         yield from self._get_httpsession()
         # Get login page
@@ -193,4 +193,7 @@ class EboxClient(object):
 
     def close_session(self):
         """Close current session."""
-        self._session.close()
+        if not self._session.closed:
+            if self._session._connector_owner:
+                self._session._connector.close()
+            self._session._connector = None
