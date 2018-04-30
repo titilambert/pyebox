@@ -1,13 +1,10 @@
 from setuptools import setup
 
-if sys.version_info < (3,4):
-    sys.exit('Sorry, Python < 3.4 is not supported')
-
 install_requires = list(val.strip() for val in open('requirements.txt'))
 tests_require = list(val.strip() for val in open('test_requirements.txt'))
 
 setup(name='pyebox',
-      version='1.1.1',
+      version='1.1.2',
       description='Get your EBox consumption (wwww.ebox.ca)',
       author='Thibault Cohen',
       author_email='titilambert@gmail.com',
