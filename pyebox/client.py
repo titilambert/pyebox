@@ -87,7 +87,7 @@ class EboxClient(object):
         if raw_res.status != 302:
             raise PyEboxError("Bad HTTP status code")
         # search for errors
-        re_results = re.search(r"err=(\d*)&", raw_res.headers.get('Location'))
+        re_results = re.search(r"err=[^&]*&", raw_res.headers.get('Location'))
         if re_results:
             await self._handle_login_error(raw_res.headers.get('Location'))
         return True
