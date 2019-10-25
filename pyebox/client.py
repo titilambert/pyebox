@@ -119,20 +119,6 @@ class EboxClient(object):
         # Prepare soup
         content = await raw_res.text()
         soup = BeautifulSoup(content, 'html.parser')
-        # Looking for limit
-        limit_node = soup.find('span', {'class': 'text_summary3'})
-        if limit_node is None:
-            raise PyEboxError("Can not find limit span")
-        raw_data = [d.strip() for d in limit_node.text.split("/")]
-        if len(raw_data) != 2:
-            raise PyEboxError("Can not get limit data")
-        try:
-            home_data["limit"] = float(raw_data[1].split()[0])
-        except ValueError:
-            # It seems that you don't have any limit...
-            home_data["limit"] = 0.0
-        except OSError:
-            raise PyEboxError("Can not get limit data")
         # Get balance
         try:
             str_value = soup.find("div", {"class": "text_amount"}).\
@@ -140,13 +126,6 @@ class EboxClient(object):
             home_data["balance"] = float(str_value)
         except OSError:
             raise PyEboxError("Can not get current balance")
-        # Get percent
-        try:
-            str_value = soup.find("div", {"id": "circleprogress_0"}).\
-                            attrs.get("data-perc")
-            home_data["usage"] = float(str_value)
-        except OSError:
-            raise PyEboxError("Can not get usage percent")
         return home_data
 
     async def _get_usage_data(self):
@@ -160,6 +139,27 @@ class EboxClient(object):
         if span_list is None:
             raise PyEboxError("Can not get usage page")
         usage_data = {}
+        # Looking for limit
+        limit_node = soup.find('span', {'class': 'text_summary3'})
+        if limit_node is None:
+            raise PyEboxError("Can not find limit span")
+        raw_data = [d.strip() for d in limit_node.text.split("/")]
+        if len(raw_data) != 2:
+            raise PyEboxError("Can not get limit data")
+        try:
+            usage_data["limit"] = float(raw_data[1].split()[0])
+        except ValueError:
+            # It seems that you don't have any limit...
+            usage_data["limit"] = 0.0
+        except OSError:
+            raise PyEboxError("Can not get limit data")
+        # Get percent
+        try:
+            str_value = soup.find("div", {"id": "circleprogress_0"}).\
+                            attrs.get("data-perc")
+            usage_data["usage"] = float(str_value)
+        except OSError:
+            raise PyEboxError("Can not get usage percent")
         # Get data
         for key, index in USAGE_MAP.items():
             try:
